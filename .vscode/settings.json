@@ -3,6 +3,7 @@
   "azureFunctions.projectSubpath": "src/Todo.Api",
   "azureFunctions.projectLanguage": "C#",
   "azureFunctions.projectRuntime": "~4",
+  "azureFunctions.validateEmulators": false,
   "debug.internalConsoleOptions": "neverOpen",
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,

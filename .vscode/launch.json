@@ -5,8 +5,7 @@
       "name": "Debug Functions (Todo.Api)",
       "type": "coreclr",
       "request": "attach",
-      "processId": "${command:azureFunctions.pickProcess}",
-      "preLaunchTask": "func: host start"
+      "processId": "${command:azureFunctions.pickProcess}"
     },
     {
       "name": "Debug Blazor (Todo.Web)",
@@ -21,14 +20,33 @@
       },
       "serverReadyAction": {
         "action": "openExternally",
-        "pattern": "\bNow listening on:\s+(https?://\S+)"
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      }
+    },
+    {
+      "name": "Blazor (local stack)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/Todo.Web/bin/Debug/net10.0/Todo.Web.dll",
+      "cwd": "${workspaceFolder}/src/Todo.Web",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5230"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "presentation": {
+        "hidden": true
       }
     }
   ],
   "compounds": [
     {
       "name": "Debug local stack (API + Web)",
-      "configurations": ["Debug Functions (Todo.Api)", "Debug Blazor (Todo.Web)"],
+      "configurations": ["Debug Functions (Todo.Api)", "Blazor (local stack)"],
+      "preLaunchTask": "build",
       "stopAll": true
     }
   ]

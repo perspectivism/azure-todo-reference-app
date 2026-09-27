@@ -33,6 +33,9 @@ secrets/
 *.token.txt
 .azure/
 
+# Local log files
+debug.log
+
 # Test results and coverage
 TestResults/
 coverage/

@@ -76,9 +76,37 @@ func start
 dotnet run --project src/Todo.Web --launch-profile http
 ```
 
-Open http://localhost:5230. In VS Code, use the tasks `func: host start` and `run: web`, or the launch configuration **Debug local stack (API + Web)**. The API alone can be exercised with the Postman collection in `postman/` (set `baseUrl` to `http://localhost:7071`).
+Open http://localhost:5230. The API alone can be exercised with the Postman collection in `postman/` (set `baseUrl` to `http://localhost:7071`).
 
-Optional real Entra sign-in locally is described in [docs/configuration.md](docs/configuration.md).
+There are no `.env` files: local settings come from `src/Todo.Api/local.settings.json` (untracked), the `appsettings.Development.json` files, and the launch profiles. See [Local configuration files](docs/configuration.md#local-configuration-files). Optional real Entra sign-in locally is described in the same document.
+
+### Debug in VS Code
+
+Complete the first-run setup above, start the Cosmos DB Emulator, and install the recommended extensions. Debugging needs the C# Dev Kit extension, the Azure Functions extension, and Azure Functions Core Tools (`func`, a prerequisite above). Then open the **Run and Debug** view and pick a configuration from `.vscode/launch.json`:
+
+| Configuration | What it does |
+| --- | --- |
+| **Debug local stack (API + Web)** | Builds the solution, starts the Functions host (port 7071) and attaches to the API worker, and launches the Blazor app (port 5230) under the debugger. The browser opens when the app is listening. Stopping one stops both debug sessions. |
+| **Debug Functions (Todo.Api)** | Builds the API, starts the Functions host, and attaches to the API worker. |
+| **Debug Blazor (Todo.Web)** | Builds and launches the Blazor app. Start the API separately (task `run: api`) so the UI has data. |
+
+How the API attach works: the Functions configuration uses the Azure Functions extension's `azureFunctions.pickProcess`, which runs the `func: host start` task (`func host start --dotnet-isolated-debug --enable-json-output`). The host starts the worker, the worker prints `Azure Functions .NET Worker (PID: …) initialized in debug mode. Waiting for debugger to attach...`, and the extension reads that process id from the host's JSON output and attaches automatically; there is no process picker. Because the worker waits for the debugger, breakpoints in startup code (`Program.cs`) and in request handling (for example `HealthFunction`, via http://localhost:7071/health) both hit.
+
+Use the `run: api` task (plain `func start`, no debugger) when you only want the API running, for example alongside **Debug Blazor**. Do not use `func: host start` for that: its worker waits for a debugger, and the host gives up after about a minute.
+
+Useful tasks (**Terminal**, **Run Task**): `build`, `test: unit`, `test: integration (local)`, `run: api`, `run: web`, `check prerequisites`, `check repo safety`, `bicep: build and lint`.
+
+The Functions host logs `azure.functions.webjobs.storage ... Unhealthy: Unable to create client for AzureWebJobsStorage` every 30 seconds. This is expected locally: the HTTP-only host needs no storage account. `.vscode/settings.json` sets `azureFunctions.validateEmulators` to `false` so the Azure Functions extension does not prompt for storage or Azurite before debugging.
+
+If debugging does not start:
+
+- Open http://localhost:7071/health, not http://localhost:7071/: the root is the Functions host's own page and never reaches the API code.
+- Stop any `run: api`, `func start`, or `dotnet run` already using ports 7071 or 5230 before debugging.
+- `Failed to detect running Functions host within "60" seconds`: the attach did not complete in time (for example a slow first build). Start again, or raise `azureFunctions.pickProcessTimeout` in `.vscode/settings.json`.
+- `Error exists after running preLaunchTask "…"`: the extension stops waiting when any task in the workspace exits with an error while it starts the host, such as a failed build. Fix the task in its terminal and start again.
+- If the API fails at startup with a message about Cosmos DB, `local.settings.json` is missing or has no `Cosmos__ConnectionString` (see step 3 of the first-run setup), or the emulator is not running.
+- After editing `.vscode/*.json`, run **Developer: Reload Window**.
+- If pressing F5 does nothing at all (no debug toolbar, nothing in the Debug Console), even for **Debug Blazor**, the C# extension installation is at fault. Run **Developer: Restart Extension Host**; if that does not help, uninstall C# Dev Kit and C#, reload the window, and reinstall C# Dev Kit.
 
 ## Run tests
 

@@ -41,7 +41,7 @@
       "args": [
         "-NoProfile",
         "-File",
-        "/scripts/run-integration-tests.ps1",
+        "${workspaceFolder}/scripts/run-integration-tests.ps1",
         "-Target",
         "Local"
       ],
@@ -73,15 +73,42 @@
     },
     {
       "label": "func: host start",
-      "detail": "Start the Azure Functions host (Todo.Api) on port 7071",
+      "detail": "Debugging only: build Todo.Api and start the Functions host in debug mode; the worker waits for the debugger. Started by the Functions debug configuration (azureFunctions.pickProcess).",
       "type": "func",
-      "command": "host start --port 7071",
+      "command": "host start",
+      "args": ["--port", "7071", "--no-build", "--dotnet-isolated-debug", "--enable-json-output"],
       "options": {
-        "cwd": "${workspaceFolder}/src/Todo.Api"
+        "cwd": "${workspaceFolder}/src/Todo.Api/bin/Debug/net10.0"
       },
       "dependsOn": "build: api",
       "isBackground": true,
       "problemMatcher": "$func-dotnet-watch"
+    },
+    {
+      "label": "run: api",
+      "detail": "Build Todo.Api and run the Functions host on http://localhost:7071 without a debugger",
+      "type": "process",
+      "command": "func",
+      "args": ["start", "--port", "7071", "--no-build"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/Todo.Api/bin/Debug/net10.0"
+      },
+      "dependsOn": "build: api",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "func",
+        "source": "func",
+        "pattern": {
+          "regexp": "^__never_matches__$",
+          "file": 1,
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Azure Functions Core Tools",
+          "endsPattern": "Worker process started and initialized|Host lock lease acquired by instance ID"
+        }
+      }
     },
     {
       "label": "run: web",

@@ -2,6 +2,23 @@
 
 .NET configuration keys use `:` in JSON and `__` in environment variables and App Service/Function app settings (for example `Auth:Mode` = `Auth__Mode`). Tenant ids and client ids are identifiers, not secrets, but they are supplied through environment variables, script parameters, or GitHub variables rather than committed.
 
+## Local configuration files
+
+The repository does not use `.env` files (.NET does not read them). Local development uses these files; nothing else needs to be created except `local.settings.json`.
+
+| File | Tracked | Loaded when | Contents |
+| --- | --- | --- | --- |
+| `src/Todo.Api/local.settings.json` | **No** (ignored by Git) | `func start` / the VS Code Functions tasks; values become environment variables for the host and worker | `FUNCTIONS_WORKER_RUNTIME`, `AZURE_FUNCTIONS_ENVIRONMENT=Development`, and the emulator `Cosmos__ConnectionString`. Create it by copying `local.settings.json.example` in the same folder. |
+| `src/Todo.Api/local.settings.json.example` | Yes | never (template) | The same keys with an empty connection string and a link to the emulator documentation |
+| `src/Todo.Api/appsettings.Development.json` | Yes | host environment is Development | `Auth:Mode=Dev`, `Cosmos:AutoCreate=true`. Not published. |
+| `src/Todo.Web/appsettings.Development.json` | Yes | `ASPNETCORE_ENVIRONMENT=Development` | `Auth:Mode=Dev`, `TodoApi:BaseUrl=http://localhost:7071/`. Not published. |
+| `src/Todo.Api/Properties/launchSettings.json` | Yes | Visual Studio | Functions host port 7071 (`func start` and the VS Code tasks pass `--port 7071` themselves) |
+| `src/Todo.Web/Properties/launchSettings.json` | Yes | `dotnet run --launch-profile http\|https` | Ports 5230 (http) and 7070 (https); sets `ASPNETCORE_ENVIRONMENT=Development` |
+| `.vscode/launch.json`, `.vscode/tasks.json` | Yes | VS Code | Debug configurations and tasks; they set the same environment and ports |
+| .NET user secrets for `Todo.Web` (`UserSecretsId` `todo-web-local-dev`) | No (stored in your user profile) | Development | Optional: only for real Entra sign-in locally (see below) |
+
+Precedence (later wins): `appsettings.json`, `appsettings.Development.json`, user secrets (web, Development only), environment variables (including the values from `local.settings.json` for the Functions host). For example, `run-integration-tests.ps1` sets `Auth__Mode=Entra` as an environment variable to override `appsettings.Development.json` for its Entra phase.
+
 ## API (`src/Todo.Api`)
 
 | Key | Purpose | Location | Required | Secret | Environment behaviour | Example |

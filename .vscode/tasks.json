@@ -2,6 +2,57 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "build",
+      "detail": "Build the solution",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/TodoApp.slnx", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test: unit",
+      "detail": "Run unit and bUnit component tests",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "${workspaceFolder}/tests/Todo.UnitTests/Todo.UnitTests.csproj"],
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build: api",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/src/Todo.Api/Todo.Api.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build: web",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/src/Todo.Web/Todo.Web.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "func: host start",
+      "detail": "Start the Azure Functions host (Todo.Api) on port 7071",
+      "type": "func",
+      "command": "host start --port 7071",
+      "options": { "cwd": "${workspaceFolder}/src/Todo.Api" },
+      "dependsOn": "build: api",
+      "isBackground": true,
+      "problemMatcher": "$func-dotnet-watch"
+    },
+    {
+      "label": "run: web",
+      "detail": "Run the Blazor Web App (Todo.Web) on http://localhost:5230",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["run", "--project", "${workspaceFolder}/src/Todo.Web/Todo.Web.csproj", "--launch-profile", "http"],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
       "label": "check prerequisites",
       "type": "shell",
       "command": "pwsh",

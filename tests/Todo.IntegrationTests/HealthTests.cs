@@ -8,7 +8,7 @@ namespace Todo.IntegrationTests;
 [Trait("Target", "Azure")]
 public sealed class HealthTests
 {
-    [Fact(Skip = ApiTarget.NotConfiguredReason, SkipUnless = nameof(ApiTarget.IsConfigured), SkipType = typeof(ApiTarget))]
+    [ApiFact]
     public async Task Health_returns_200_without_authentication()
     {
         using var client = ApiTarget.CreateAnonymousClient();

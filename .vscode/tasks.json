@@ -6,8 +6,16 @@
       "detail": "Build the solution",
       "type": "process",
       "command": "dotnet",
-      "args": ["build", "${workspaceFolder}/TodoApp.slnx", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
-      "group": { "kind": "build", "isDefault": true },
+      "args": [
+        "build",
+        "${workspaceFolder}/TodoApp.slnx",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
       "problemMatcher": "$msCompile"
     },
     {
@@ -15,22 +23,52 @@
       "detail": "Run unit and bUnit component tests",
       "type": "process",
       "command": "dotnet",
-      "args": ["test", "${workspaceFolder}/tests/Todo.UnitTests/Todo.UnitTests.csproj"],
-      "group": { "kind": "test", "isDefault": true },
+      "args": [
+        "test",
+        "${workspaceFolder}/tests/Todo.UnitTests/Todo.UnitTests.csproj"
+      ],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
       "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test: integration (local)",
+      "detail": "Start the Functions host and run HTTP integration tests (scripts/run-integration-tests.ps1 -Target Local)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "/scripts/run-integration-tests.ps1",
+        "-Target",
+        "Local"
+      ],
+      "problemMatcher": []
     },
     {
       "label": "build: api",
       "type": "process",
       "command": "dotnet",
-      "args": ["build", "${workspaceFolder}/src/Todo.Api/Todo.Api.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Todo.Api/Todo.Api.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
       "problemMatcher": "$msCompile"
     },
     {
       "label": "build: web",
       "type": "process",
       "command": "dotnet",
-      "args": ["build", "${workspaceFolder}/src/Todo.Web/Todo.Web.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Todo.Web/Todo.Web.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
       "problemMatcher": "$msCompile"
     },
     {
@@ -38,7 +76,9 @@
       "detail": "Start the Azure Functions host (Todo.Api) on port 7071",
       "type": "func",
       "command": "host start --port 7071",
-      "options": { "cwd": "${workspaceFolder}/src/Todo.Api" },
+      "options": {
+        "cwd": "${workspaceFolder}/src/Todo.Api"
+      },
       "dependsOn": "build: api",
       "isBackground": true,
       "problemMatcher": "$func-dotnet-watch"
@@ -48,7 +88,13 @@
       "detail": "Run the Blazor Web App (Todo.Web) on http://localhost:5230",
       "type": "process",
       "command": "dotnet",
-      "args": ["run", "--project", "${workspaceFolder}/src/Todo.Web/Todo.Web.csproj", "--launch-profile", "http"],
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/src/Todo.Web/Todo.Web.csproj",
+        "--launch-profile",
+        "http"
+      ],
       "isBackground": true,
       "problemMatcher": []
     },
@@ -56,14 +102,22 @@
       "label": "check prerequisites",
       "type": "shell",
       "command": "pwsh",
-      "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/check-prerequisites.ps1"],
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/scripts/check-prerequisites.ps1"
+      ],
       "problemMatcher": []
     },
     {
       "label": "check repo safety",
       "type": "shell",
       "command": "pwsh",
-      "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/check-repo-safety.ps1"],
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/scripts/check-repo-safety.ps1"
+      ],
       "problemMatcher": []
     }
   ]

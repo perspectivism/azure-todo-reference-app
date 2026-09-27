@@ -12,4 +12,9 @@
     <InternalsVisibleTo Include="Todo.UnitTests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Development-only settings (Auth:Mode=Dev) are never published. -->
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
 </Project>

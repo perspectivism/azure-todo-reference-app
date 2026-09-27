@@ -1,7 +1,9 @@
 @page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
 
-<PageTitle>Todo</PageTitle>
+<PageTitle>My todos</PageTitle>
 
-<h1>Todo</h1>
+<h1 class="h3 mb-3">Todo</h1>
 
-<p>A small multi-user Todo application.</p>
+<TodoBoard />

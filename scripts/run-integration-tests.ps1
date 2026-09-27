@@ -7,7 +7,10 @@
     -Target Local
         Requires the Azure Cosmos DB Emulator and Cosmos__ConnectionString in src/Todo.Api/local.settings.json
         (or the environment). Builds the solution, then runs two phases against a local Azure Functions host:
-          1. Auth:Mode=Dev   - full CRUD, validation, paging and cross-user suite (Target=Local tests)
+          1. Auth:Mode=Dev   - full CRUD, validation, paging and cross-user suite (Target=Local tests),
+                               then a Blazor app startup check: the app starts in Dev mode against the local API,
+                               and GET / returns 200 with the development user and a todo seeded through the API
+                               in the server-prerendered HTML (skip with -SkipWebCheck)
           2. Auth:Mode=Entra - anonymous and invalid-token requests must be rejected with 401
         For each phase the script starts the host, waits for /health, runs the tests, and stops the host.
         Host logs are written to TestResults/func-host-<phase>.log.
@@ -29,13 +32,19 @@ param(
 
     [int] $Port = 7071,
 
-    [int] $StartupTimeoutSeconds = 120
+    [int] $WebPort = 5230,
+
+    [int] $StartupTimeoutSeconds = 120,
+
+    # Skip the Blazor app startup check that follows the Dev-mode API tests.
+    [switch] $SkipWebCheck
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $apiProject = Join-Path $repoRoot 'src/Todo.Api'
 $testProject = Join-Path $repoRoot 'tests/Todo.IntegrationTests/Todo.IntegrationTests.csproj'
+$webProject = Join-Path $repoRoot 'src/Todo.Web/Todo.Web.csproj'
 $resultsDir = Join-Path $repoRoot 'TestResults'
 New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
 
@@ -124,8 +133,76 @@ function Start-FunctionsHost {
 
 function Stop-FunctionsHost($Process) {
     if ($Process -and -not $Process.HasExited) {
-        try { $Process.Kill($true) } catch { Write-Warning "Could not stop Functions host: $($_.Exception.Message)" }
+        try { $Process.Kill($true) } catch { Write-Warning "Could not stop process $($Process.Id): $($_.Exception.Message)" }
         $Process.WaitForExit(15000) | Out-Null
+    }
+}
+
+# Starts the Blazor app in Dev mode against the running local API and checks that the root URL responds with
+# server-prerendered content that came from the API (profile name plus a todo seeded through the API).
+function Invoke-WebStartupCheck {
+    if (Test-PortInUse $WebPort) {
+        throw "Port $WebPort is already in use. Stop the process using it and retry."
+    }
+
+    $webUrl = "http://localhost:$WebPort"
+    $logFile = Join-Path $resultsDir 'web-app.log'
+    $webEnvironment = @{
+        ASPNETCORE_ENVIRONMENT = 'Development'
+        ASPNETCORE_URLS        = $webUrl
+        Auth__Mode             = 'Dev'
+        TodoApi__BaseUrl       = "http://localhost:$Port/"
+    }
+    $saved = @{}
+    foreach ($key in $webEnvironment.Keys) {
+        $saved[$key] = [Environment]::GetEnvironmentVariable($key)
+        [Environment]::SetEnvironmentVariable($key, $webEnvironment[$key])
+    }
+    try {
+        Write-Host "==> [web] starting Blazor app on $webUrl (log: $logFile)" -ForegroundColor Cyan
+        $web = Start-Process -FilePath 'dotnet' -ArgumentList @('run', '--project', "`"$webProject`"", '--no-build', '--no-launch-profile') `
+            -WorkingDirectory (Split-Path $webProject) -RedirectStandardOutput $logFile -RedirectStandardError "$logFile.err" -PassThru -NoNewWindow
+    }
+    finally {
+        foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key]) }
+    }
+
+    # Seed a todo for the fixed development user (no X-Dev-User-Id header) through the API.
+    $marker = "startup-check-$([guid]::NewGuid().ToString('N'))"
+    $seeded = Invoke-RestMethod -Method Post -Uri "http://localhost:$Port/todos" -ContentType 'application/json' -Body (@{ title = $marker } | ConvertTo-Json)
+    try {
+        $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
+        $response = $null
+        while ((Get-Date) -lt $deadline -and -not $web.HasExited) {
+            try {
+                $response = Invoke-WebRequest -Uri "$webUrl/" -TimeoutSec 10 -SkipHttpErrorCheck
+                if ($response.StatusCode -eq 200) { break }
+            }
+            catch {
+                Start-Sleep -Milliseconds 500
+            }
+            Start-Sleep -Seconds 1
+        }
+
+        if (-not $response -or $response.StatusCode -ne 200) {
+            Get-Content $logFile -Tail 40 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+            throw "[web] Blazor app root URL did not return 200 within $StartupTimeoutSeconds seconds."
+        }
+
+        $html = $response.Content
+        $checks = [ordered]@{
+            'Blazor script reference'           = $html -match '_framework/blazor\.web'
+            'signed-in development user shown'  = $html.Contains('Development User')
+            'todo from the API rendered'        = $html.Contains($marker)
+        }
+        foreach ($check in $checks.GetEnumerator()) {
+            if (-not $check.Value) { throw "[web] startup check failed: $($check.Key)." }
+            Write-Host "[web] PASS $($check.Key)"
+        }
+    }
+    finally {
+        Invoke-WebRequest -Method Delete -Uri "http://localhost:$Port/todos/$($seeded.id)" -SkipHttpErrorCheck | Out-Null
+        Stop-FunctionsHost $web
     }
 }
 
@@ -191,6 +268,9 @@ try {
                 TODOAPP_API_BASE_URL    = $localUrl
                 TODOAPP_TARGET          = 'Local'
                 TODOAPP_LOCAL_AUTH_MODE = if ($phase.Label -eq 'dev') { 'Dev' } else { 'Entra' }
+            }
+            if ($phase.Label -eq 'dev' -and -not $SkipWebCheck) {
+                Invoke-WebStartupCheck
             }
         }
         finally {

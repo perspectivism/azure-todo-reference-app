@@ -14,9 +14,10 @@ public static class TodoWebServiceCollectionExtensions
 
         var authOptions = configuration.GetSection(WebAuthOptions.SectionName).Get<WebAuthOptions>() ?? new WebAuthOptions();
         var apiOptions = configuration.GetSection(TodoApiOptions.SectionName).Get<TodoApiOptions>() ?? new TodoApiOptions();
-        ValidateStartup(authOptions, apiOptions, environment);
+        ValidateStartup(authOptions, apiOptions, environment, configuration.GetSection(EntraWebAuthentication.AzureAdSection));
 
         services.AddSingleton(authOptions);
+        services.AddSingleton(apiOptions);
         services.AddCascadingAuthenticationState();
         services.AddAuthorization();
 
@@ -28,8 +29,12 @@ public static class TodoWebServiceCollectionExtensions
                 services.AddScoped<ITodoApiRequestAuthorizer, DevTodoApiRequestAuthorizer>();
                 break;
 
+            case WebAuthMode.Entra:
+                EntraWebAuthentication.Add(services, configuration, apiOptions);
+                break;
+
             default:
-                throw new InvalidOperationException($"Auth:Mode '{authOptions.Mode}' is not supported by this build.");
+                throw new InvalidOperationException($"Unsupported Auth:Mode '{authOptions.Mode}'.");
         }
 
         var baseUrl = apiOptions.BaseUrl!.TrimEnd('/') + "/";
@@ -42,7 +47,7 @@ public static class TodoWebServiceCollectionExtensions
         return services;
     }
 
-    internal static void ValidateStartup(WebAuthOptions authOptions, TodoApiOptions apiOptions, IHostEnvironment environment)
+    internal static void ValidateStartup(WebAuthOptions authOptions, TodoApiOptions apiOptions, IHostEnvironment environment, IConfiguration? azureAd = null)
     {
         if (authOptions.Mode == WebAuthMode.Dev && !environment.IsDevelopment())
         {
@@ -53,6 +58,19 @@ public static class TodoWebServiceCollectionExtensions
         if (!Uri.TryCreate(apiOptions.BaseUrl, UriKind.Absolute, out _))
         {
             throw new InvalidOperationException("TodoApi:BaseUrl must be set to the Todo API base URL (the APIM gateway URL in Azure).");
+        }
+
+        if (authOptions.Mode == WebAuthMode.Entra)
+        {
+            if (!Guid.TryParse(azureAd?["TenantId"], out _) || !Guid.TryParse(azureAd?["ClientId"], out _))
+            {
+                throw new InvalidOperationException("AzureAd:TenantId and AzureAd:ClientId (the todo-web application id) must be set when Auth:Mode is 'Entra'.");
+            }
+
+            if (string.IsNullOrWhiteSpace(apiOptions.Scope))
+            {
+                throw new InvalidOperationException("TodoApi:Scope must be set (api://{todo-api client id}/access_as_user) when Auth:Mode is 'Entra'.");
+            }
         }
     }
 }

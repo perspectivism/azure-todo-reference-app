@@ -39,7 +39,10 @@ param(
 
     [switch] $WhatIfOnly,
 
-    [switch] $Yes
+    [switch] $Yes,
+
+    # Folder containing prebuilt api.zip and web.zip (CI builds and tests once, then deploys the same packages).
+    [string] $PackageDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -95,7 +98,7 @@ try {
     $mode = if ($WhatIfOnly) { 'what-if preview (zero-write)' } elseif ($Yes) { 'non-interactive redeployment (-Yes)' } else { 'interactive deployment' }
 
     Write-Section 'Prerequisites'
-    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'check-prerequisites.ps1')
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'check-prerequisites.ps1') -ForDeployment
     if ($LASTEXITCODE -ne 0) { throw 'Prerequisite check failed.' }
 
     Write-Section 'Azure context'
@@ -139,20 +142,24 @@ try {
     az bicep build-params --file $paramFile --stdout | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Bicep parameter file build failed.' }
 
-    Write-Section 'Region capability checks (read-only)'
-    $flexLocations = @(Invoke-Az @('functionapp', 'list-flexconsumption-locations', '--query', '[].name') -Json) | ForEach-Object { $_.ToLowerInvariant().Replace(' ', '') }
-    if ($flexLocations -notcontains $location.ToLowerInvariant()) {
-        throw "Flex Consumption is not available in '$location'. Choose a supported region (TODOAPP_LOCATION); no other plan is substituted."
+    # -Yes redeploys an environment whose region was validated during the interactive bootstrap. These checks read
+    # subscription-level provider data, which the resource-group-scoped CI identity cannot read.
+    if (-not $Yes) {
+        Write-Section 'Region capability checks (read-only)'
+        $flexLocations = @(Invoke-Az @('functionapp', 'list-flexconsumption-locations', '--query', '[].name') -Json) | ForEach-Object { $_.ToLowerInvariant().Replace(' ', '') }
+        if ($flexLocations -notcontains $location.ToLowerInvariant()) {
+            throw "Flex Consumption is not available in '$location'. Choose a supported region (TODOAPP_LOCATION); no other plan is substituted."
+        }
+        $flexRuntimes = Invoke-Az @('functionapp', 'list-flexconsumption-runtimes', '--location', $location, '--runtime', 'dotnet-isolated') -Json
+        if (($flexRuntimes | ConvertTo-Json -Depth 16) -notmatch '"10\.0"') {
+            throw "Flex Consumption in '$location' does not list dotnet-isolated 10.0."
+        }
+        $webRuntimes = @(Invoke-Az @('webapp', 'list-runtimes', '--os', 'linux') -Json)
+        if (-not ($webRuntimes | Where-Object { $_ -match '^DOTNETCORE[:|]10\.0$' })) {
+            throw 'App Service Linux does not list DOTNETCORE 10.0.'
+        }
+        Write-Host "Flex Consumption with dotnet-isolated 10.0 and App Service Linux DOTNETCORE 10.0 are available in $location."
     }
-    $flexRuntimes = Invoke-Az @('functionapp', 'list-flexconsumption-runtimes', '--location', $location, '--runtime', 'dotnet-isolated') -Json
-    if (($flexRuntimes | ConvertTo-Json -Depth 16) -notmatch '"10\.0"') {
-        throw "Flex Consumption in '$location' does not list dotnet-isolated 10.0."
-    }
-    $webRuntimes = @(Invoke-Az @('webapp', 'list-runtimes', '--os', 'linux') -Json)
-    if (-not ($webRuntimes | Where-Object { $_ -match '^DOTNETCORE[:|]10\.0$' })) {
-        throw 'App Service Linux does not list DOTNETCORE 10.0.'
-    }
-    Write-Host "Flex Consumption with dotnet-isolated 10.0 and App Service Linux DOTNETCORE 10.0 are available in $location."
 
     $rgExists = (Invoke-Az @('group', 'exists', '--name', $resourceGroup) | Out-String).Trim() -eq 'true'
 
@@ -240,8 +247,15 @@ try {
 
     Write-Section 'Deploy application packages'
     New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
-    $apiZip = New-ZipPackage (Join-Path $repoRoot 'src/Todo.Api/Todo.Api.csproj') 'api'
-    $webZip = New-ZipPackage (Join-Path $repoRoot 'src/Todo.Web/Todo.Web.csproj') 'web'
+    if ($PackageDirectory) {
+        $apiZip = Join-Path $PackageDirectory 'api.zip'
+        $webZip = Join-Path $PackageDirectory 'web.zip'
+        if (-not (Test-Path $apiZip) -or -not (Test-Path $webZip)) { throw '-PackageDirectory must contain api.zip and web.zip.' }
+    }
+    else {
+        $apiZip = New-ZipPackage (Join-Path $repoRoot 'src/Todo.Api/Todo.Api.csproj') 'api'
+        $webZip = New-ZipPackage (Join-Path $repoRoot 'src/Todo.Web/Todo.Web.csproj') 'web'
+    }
     Invoke-Az @('functionapp', 'deployment', 'source', 'config-zip', '--resource-group', $resourceGroup, '--name', $functionAppName, '--src', $apiZip) | Out-Null
     Write-Host 'Function App package deployed.'
     Invoke-Az @('webapp', 'deploy', '--resource-group', $resourceGroup, '--name', $webAppName, '--src-path', $webZip, '--type', 'zip') | Out-Null

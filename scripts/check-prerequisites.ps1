@@ -7,13 +7,18 @@
     Prints PASS / FAIL / WARN for each check. Never installs software.
     Exit code 0 when every required check passes, 1 otherwise.
 
+.PARAMETER ForDeployment
+    Check only the tools deployment needs (.NET SDK, Git, PowerShell, Azure CLI, Bicep). Used by deploy.ps1 and CI.
+
 .PARAMETER RequireEmulator
     Treat an unreachable Azure Cosmos DB Emulator as a failure instead of a warning.
     Used by milestone gates that run local integration tests.
 #>
 [CmdletBinding()]
 param(
-    [switch] $RequireEmulator
+    [switch] $RequireEmulator,
+
+    [switch] $ForDeployment
 )
 
 $ErrorActionPreference = 'Stop'
@@ -99,47 +104,50 @@ else {
     Write-Result FAIL 'Bicep (az bicep)' 'requires Azure CLI' 'Install Azure CLI, then run: az bicep install'
 }
 
-# Azure Functions Core Tools v4
-$func = Invoke-Tool 'func' @('--version')
-if ($func -and $func -match '^4\.') {
-    Write-Result PASS 'Azure Functions Core Tools v4' $func
-}
-elseif ($func) {
-    Write-Result FAIL 'Azure Functions Core Tools v4' "found $func" 'winget install Microsoft.Azure.FunctionsCoreTools'
-}
-else {
-    Write-Result FAIL 'Azure Functions Core Tools v4' 'not found' 'winget install Microsoft.Azure.FunctionsCoreTools'
-}
+# Development-only tools. Deployment (-ForDeployment) needs only the tools above.
+if (-not $ForDeployment) {
+    # Azure Functions Core Tools v4
+    $func = Invoke-Tool 'func' @('--version')
+    if ($func -and $func -match '^4\.') {
+        Write-Result PASS 'Azure Functions Core Tools v4' $func
+    }
+    elseif ($func) {
+        Write-Result FAIL 'Azure Functions Core Tools v4' "found $func" 'winget install Microsoft.Azure.FunctionsCoreTools'
+    }
+    else {
+        Write-Result FAIL 'Azure Functions Core Tools v4' 'not found' 'winget install Microsoft.Azure.FunctionsCoreTools'
+    }
 
-# VS Code (recommended)
-$code = Invoke-Tool 'code' @('--version')
-if ($code) { Write-Result PASS 'Visual Studio Code (recommended)' (($code -split "`n")[0]) }
-else { Write-Result WARN 'Visual Studio Code (recommended)' 'not found on PATH' 'winget install Microsoft.VisualStudioCode' }
+    # VS Code (recommended)
+    $code = Invoke-Tool 'code' @('--version')
+    if ($code) { Write-Result PASS 'Visual Studio Code (recommended)' (($code -split "`n")[0]) }
+    else { Write-Result WARN 'Visual Studio Code (recommended)' 'not found on PATH' 'winget install Microsoft.VisualStudioCode' }
 
-# Azure Cosmos DB Emulator: installed?
-$emulatorPaths = @(
-    (Join-Path $env:ProgramFiles 'Azure Cosmos DB Emulator\Microsoft.Azure.Cosmos.Emulator.exe')
-) | Where-Object { $_ }
-$emulatorInstalled = $IsWindows -and ($emulatorPaths | Where-Object { Test-Path $_ })
-$emulatorHelp = 'Install and start the emulator: https://learn.microsoft.com/en-us/azure/cosmos-db/emulator'
-if ($emulatorInstalled) { Write-Result PASS 'Cosmos DB Emulator installed' }
-else { Write-Result WARN 'Cosmos DB Emulator installed' 'not found in the default install location' $emulatorHelp }
+    # Azure Cosmos DB Emulator: installed?
+    $emulatorPaths = @(
+        (Join-Path $env:ProgramFiles 'Azure Cosmos DB Emulator\Microsoft.Azure.Cosmos.Emulator.exe')
+    ) | Where-Object { $_ }
+    $emulatorInstalled = $IsWindows -and ($emulatorPaths | Where-Object { Test-Path $_ })
+    $emulatorHelp = 'Install and start the emulator: https://learn.microsoft.com/en-us/azure/cosmos-db/emulator'
+    if ($emulatorInstalled) { Write-Result PASS 'Cosmos DB Emulator installed' }
+    else { Write-Result WARN 'Cosmos DB Emulator installed' 'not found in the default install location' $emulatorHelp }
 
-# Azure Cosmos DB Emulator: reachable on its documented local endpoint (https://localhost:8081)?
-$reachable = $false
-$client = [System.Net.Sockets.TcpClient]::new()
-try {
-    $reachable = $client.ConnectAsync('localhost', 8081).Wait(3000) -and $client.Connected
-}
-catch {
+    # Azure Cosmos DB Emulator: reachable on its documented local endpoint (https://localhost:8081)?
     $reachable = $false
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $reachable = $client.ConnectAsync('localhost', 8081).Wait(3000) -and $client.Connected
+    }
+    catch {
+        $reachable = $false
+    }
+    finally {
+        $client.Dispose()
+    }
+    $emulatorStatus = if ($reachable) { 'PASS' } elseif ($RequireEmulator) { 'FAIL' } else { 'WARN' }
+    $emulatorDetail = if ($reachable) { 'https://localhost:8081' } else { 'not reachable on https://localhost:8081' }
+    Write-Result $emulatorStatus 'Cosmos DB Emulator reachable' $emulatorDetail "Start the Azure Cosmos DB Emulator. $emulatorHelp"
 }
-finally {
-    $client.Dispose()
-}
-$emulatorStatus = if ($reachable) { 'PASS' } elseif ($RequireEmulator) { 'FAIL' } else { 'WARN' }
-$emulatorDetail = if ($reachable) { 'https://localhost:8081' } else { 'not reachable on https://localhost:8081' }
-Write-Result $emulatorStatus 'Cosmos DB Emulator reachable' $emulatorDetail "Start the Azure Cosmos DB Emulator. $emulatorHelp"
 
 Write-Host ''
 if ($script:failures -gt 0) {

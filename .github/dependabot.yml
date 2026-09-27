@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      azure-functions:
+        patterns: ["Microsoft.Azure.Functions.*"]
+      test:
+        patterns: ["xunit*", "bunit", "Microsoft.NET.Test.Sdk", "Microsoft.Extensions.TimeProvider.Testing"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

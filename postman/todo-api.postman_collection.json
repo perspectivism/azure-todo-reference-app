@@ -1,0 +1,282 @@
+{
+  "info": {
+    "name": "Todo API",
+    "description": "Requests for every route of the Todo API (docs/openapi.yaml). Convenience only; the xUnit integration tests are the authoritative suite.\n\nVariables:\n- baseUrl: http://localhost:7071 for the local Functions host, or the APIM gateway URL in Azure.\n- token: an access token for api://<todo-api client id>/access_as_user (see docs/operations.md). Leave empty locally. Never save a live token in this file.\n- devUserId: local Dev mode only; sent as X-Dev-User-Id to act as a specific development user.\n- todoId: set automatically by 'Create todo'.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:7071" },
+    { "key": "token", "value": "" },
+    { "key": "devUserId", "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "todoId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health (anonymous)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"] }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Todos",
+      "item": [
+        {
+          "name": "Create todo",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Dev-User-Id", "value": "{{devUserId}}", "description": "Local Dev mode only", "disabled": true }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Buy milk\",\n  \"description\": \"2 litres\",\n  \"isComplete\": false\n}" },
+            "url": { "raw": "{{baseUrl}}/todos", "host": ["{{baseUrl}}"], "path": ["todos"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Location header', () => pm.response.to.have.header('Location'));",
+                  "pm.test('userId is not returned', () => pm.expect(pm.response.json()).to.not.have.property('userId'));",
+                  "pm.collectionVariables.set('todoId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List todos",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Dev-User-Id", "value": "{{devUserId}}", "description": "Local Dev mode only", "disabled": true }],
+            "url": {
+              "raw": "{{baseUrl}}/todos?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos"],
+              "query": [{ "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('items and continuationToken', () => { const b = pm.response.json(); pm.expect(b).to.have.property('items'); pm.expect(b).to.have.property('continuationToken'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List todos (page size 1)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Dev-User-Id", "value": "{{devUserId}}", "description": "Local Dev mode only", "disabled": true }],
+            "url": {
+              "raw": "{{baseUrl}}/todos?limit=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos"],
+              "query": [{ "key": "limit", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "Get todo",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Dev-User-Id", "value": "{{devUserId}}", "description": "Local Dev mode only", "disabled": true }],
+            "url": { "raw": "{{baseUrl}}/todos/{{todoId}}", "host": ["{{baseUrl}}"], "path": ["todos", "{{todoId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"] }
+            }
+          ]
+        },
+        {
+          "name": "Update todo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Dev-User-Id", "value": "{{devUserId}}", "description": "Local Dev mode only", "disabled": true }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Buy oat milk\",\n  \"description\": null,\n  \"isComplete\": false\n}" },
+            "url": { "raw": "{{baseUrl}}/todos/{{todoId}}", "host": ["{{baseUrl}}"], "path": ["todos", "{{todoId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"] }
+            }
+          ]
+        },
+        {
+          "name": "Complete todo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Dev-User-Id", "value": "{{devUserId}}", "description": "Local Dev mode only", "disabled": true }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Buy oat milk\",\n  \"description\": null,\n  \"isComplete\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/todos/{{todoId}}", "host": ["{{baseUrl}}"], "path": ["todos", "{{todoId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('completed', () => pm.expect(pm.response.json().isComplete).to.eql(true));"] }
+            }
+          ]
+        },
+        {
+          "name": "Delete todo",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-Dev-User-Id", "value": "{{devUserId}}", "description": "Local Dev mode only", "disabled": true }],
+            "url": { "raw": "{{baseUrl}}/todos/{{todoId}}", "host": ["{{baseUrl}}"], "path": ["todos", "{{todoId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"] }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error cases",
+      "item": [
+        {
+          "name": "Malformed JSON returns 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"title\": " },
+            "url": { "raw": "{{baseUrl}}/todos", "host": ["{{baseUrl}}"], "path": ["todos"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('problem+json', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Empty title returns 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"title\": \"   \" }" },
+            "url": { "raw": "{{baseUrl}}/todos", "host": ["{{baseUrl}}"], "path": ["todos"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"] }
+            }
+          ]
+        },
+        {
+          "name": "Unknown id returns 404",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/todos/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"] }
+            }
+          ]
+        },
+        {
+          "name": "Update unknown id returns 404",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"title\": \"t\" }" },
+            "url": {
+              "raw": "{{baseUrl}}/todos/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"] }
+            }
+          ]
+        },
+        {
+          "name": "Delete unknown id returns 404",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/todos/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"] }
+            }
+          ]
+        },
+        {
+          "name": "List without a token returns 401 (Azure or Entra mode)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/todos", "host": ["{{baseUrl}}"], "path": ["todos"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"] }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

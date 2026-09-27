@@ -3,6 +3,10 @@
   "IsEncrypted": false,
   "Values": {
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
-    "AZURE_FUNCTIONS_ENVIRONMENT": "Development"
+    "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
+    // Azure Cosmos DB Emulator connection string. Copy it from the Authentication section of
+    // https://learn.microsoft.com/en-us/azure/cosmos-db/emulator
+    // Never commit this value. Alternative: an environment variable named Cosmos__ConnectionString.
+    "Cosmos__ConnectionString": ""
   }
 }

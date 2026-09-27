@@ -5,7 +5,8 @@
 
 .DESCRIPTION
     -Target Local
-        Builds the solution, then runs two phases against a local Azure Functions host:
+        Requires the Azure Cosmos DB Emulator and Cosmos__ConnectionString in src/Todo.Api/local.settings.json
+        (or the environment). Builds the solution, then runs two phases against a local Azure Functions host:
           1. Auth:Mode=Dev   - full CRUD, validation, paging and cross-user suite (Target=Local tests)
           2. Auth:Mode=Entra - anonymous and invalid-token requests must be rejected with 401
         For each phase the script starts the host, waits for /health, runs the tests, and stops the host.
@@ -67,9 +68,9 @@ function Invoke-IntegrationTests {
     }
 }
 
-function Test-PortInUse([int] $PortNumber) {
+function Test-PortInUse([int] $PortNumber, [int] $TimeoutMilliseconds = 500) {
     $client = [System.Net.Sockets.TcpClient]::new()
-    try { return $client.ConnectAsync('localhost', $PortNumber).Wait(500) -and $client.Connected }
+    try { return $client.ConnectAsync('localhost', $PortNumber).Wait($TimeoutMilliseconds) -and $client.Connected }
     catch { return $false }
     finally { $client.Dispose() }
 }
@@ -149,6 +150,21 @@ try {
 
     if (-not (Get-Command func -ErrorAction SilentlyContinue)) {
         throw 'Azure Functions Core Tools (func) not found. Run: pwsh ./scripts/check-prerequisites.ps1'
+    }
+
+    # The local host uses the Cosmos DB Emulator. Fail fast with guidance instead of a host startup error.
+    $emulatorDocs = 'https://learn.microsoft.com/en-us/azure/cosmos-db/emulator'
+    if (-not (Test-PortInUse 8081 -TimeoutMilliseconds 5000)) {
+        throw "Azure Cosmos DB Emulator is not reachable on https://localhost:8081. Start it; see $emulatorDocs"
+    }
+    $localSettings = Join-Path $apiProject 'local.settings.json'
+    $hasConnectionString = [bool] $env:Cosmos__ConnectionString
+    if (-not $hasConnectionString -and (Test-Path $localSettings)) {
+        $hasConnectionString = (Get-Content $localSettings -Raw) -match '"Cosmos__ConnectionString"\s*:\s*"[^"]+"'
+    }
+    if (-not $hasConnectionString) {
+        throw ("Cosmos__ConnectionString is not configured. Copy src/Todo.Api/local.settings.json.example to local.settings.json " +
+            "and paste the emulator connection string from the Authentication section of $emulatorDocs")
     }
 
     Write-Host '==> dotnet build' -ForegroundColor Cyan

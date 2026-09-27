@@ -122,7 +122,8 @@ try {
     # 5. Infrastructure checks.
     $infraFiles = $textFiles | Where-Object { $_ -match '^infra/.+\.(bicep|bicepparam)$' }
     $infraForbidden = [ordered]@{
-        'Dev identity mode'             = '(?i)[''"]Dev[''"]|X-Dev-User-Id'
+        # Case-sensitive: the environment name 'dev' is allowed; the identity mode value 'Dev' is not.
+        'Dev identity mode'             = '(?-i)[''"]Dev[''"]|X-Dev-User-Id'
         'account key usage (listKeys)'  = '(?i)listKeys\s*\('
         'connection string with key'    = '(?i)AccountKey'
         'shared-key storage access'     = '(?i)allowSharedKeyAccess\s*:\s*true'

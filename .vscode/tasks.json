@@ -119,6 +119,23 @@
         "${workspaceFolder}/scripts/check-repo-safety.ps1"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "bicep: build and lint",
+      "detail": "Build and lint infra/main.bicep and build both parameter files",
+      "type": "shell",
+      "command": "az bicep build --file infra/main.bicep --stdout > $null; az bicep lint --file infra/main.bicep; az bicep build-params --file infra/parameters/dev.bicepparam --stdout > $null; az bicep build-params --file infra/parameters/prod.bicepparam --stdout > $null",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "args": [
+            "-NoProfile",
+            "-Command"
+          ],
+          "executable": "pwsh"
+        }
+      },
+      "problemMatcher": []
     }
   ]
 }

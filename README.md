@@ -1,5 +1,7 @@
 # Azure Todo Reference App
 
+[![CI](https://github.com/perspectivism/azure-todo-reference-app/actions/workflows/pr.yml/badge.svg?branch=main)](https://github.com/perspectivism/azure-todo-reference-app/actions/workflows/pr.yml)
+
 **TL;DR:** A small multi-user Todo app (Blazor Interactive Server → API Management → Azure Functions → Cosmos DB serverless, secured with Microsoft Entra ID) used to show a complete, reproducible .NET 10 delivery path on Azure: local development with the Cosmos DB Emulator, layered automated tests, Bicep infrastructure, secretless deployment (managed identities, federated credentials, GitHub OIDC), and telemetry in Application Insights. Run it locally in a few minutes; deploy it with one script.
 
 ## Purpose

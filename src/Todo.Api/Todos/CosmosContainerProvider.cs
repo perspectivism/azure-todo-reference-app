@@ -28,25 +28,23 @@ public sealed class CosmosContainerProvider(CosmosClient client, CosmosOptions o
 {
     public const string PartitionKeyPath = "/userId";
 
-    private readonly Lazy<Task<Container>> _container = new(() => ResolveAsync(client, options));
+    // A failed first resolution (for example the emulator not running yet) is retried on the next request.
+    private readonly RetryingAsyncLazy<Container> _container = new(cancellationToken => ResolveAsync(client, options, cancellationToken));
 
-    public async Task<Container> GetContainerAsync(CancellationToken cancellationToken)
-    {
-        // The shared initialization is not tied to a single request's cancellation.
-        var task = _container.Value;
-        return await task.WaitAsync(cancellationToken);
-    }
+    public Task<Container> GetContainerAsync(CancellationToken cancellationToken)
+        => _container.GetValueAsync(cancellationToken);
 
-    private static async Task<Container> ResolveAsync(CosmosClient client, CosmosOptions options)
+    private static async Task<Container> ResolveAsync(CosmosClient client, CosmosOptions options, CancellationToken cancellationToken)
     {
         if (!options.AutoCreate)
         {
             return client.GetContainer(options.DatabaseName, options.ContainerName);
         }
 
-        Database database = await client.CreateDatabaseIfNotExistsAsync(options.DatabaseName);
+        Database database = await client.CreateDatabaseIfNotExistsAsync(options.DatabaseName, cancellationToken: cancellationToken);
         Container container = await database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties(options.ContainerName, PartitionKeyPath));
+            new ContainerProperties(options.ContainerName, PartitionKeyPath),
+            cancellationToken: cancellationToken);
         return container;
     }
 }

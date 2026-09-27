@@ -15,4 +15,17 @@ public static class DevIdentity
     public const string DefaultUserName = "Development User";
 
     public const string DefaultSignInName = "dev.user@localhost";
+
+    /// <summary>
+    /// Startup guard shared by the API and the web app: throws when Auth:Mode is 'Dev' and the host environment is
+    /// not Development, so the development identity can never be enabled in a deployed environment.
+    /// </summary>
+    public static void EnsureAllowed(bool isDevelopmentEnvironment, string environmentName)
+    {
+        if (!isDevelopmentEnvironment)
+        {
+            throw new InvalidOperationException(
+                $"Auth:Mode 'Dev' is allowed only when the host environment is Development (current: '{environmentName}').");
+        }
+    }
 }

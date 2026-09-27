@@ -9,7 +9,7 @@ The project needs repeatable validation of API behaviour, authorization, UI stat
 ## Decision
 
 - **xUnit is the authoritative suite.**
-  - `tests/Todo.UnitTests` (xUnit v3 + bUnit): validation, service behaviour, two-user isolation, JWT rules with locally generated signing keys (no network), Dev-mode startup guard, spoofed `userId` handling, logging content, Blazor component states with a fake API client. Fast and hermetic; run in the pre-commit hook and CI.
+  - `tests/Todo.UnitTests` (xUnit v3 + bUnit): validation, service behaviour, two-user isolation, JWT rules with locally generated signing keys (no network), Dev-mode startup guard, spoofed `userId` handling, logging content, authentication and error-mapping middleware decisions, the OpenAPI contract matching the function routes, Blazor component states with a fake API client. Fast and hermetic; run in the pre-commit hook and CI.
   - `tests/Todo.IntegrationTests` (xUnit v3): HTTP tests against a running API, tagged `Target=Local` and/or `Target=Azure`, selected with `dotnet test --filter`, and skipped when `TODOAPP_API_BASE_URL` is unset. `scripts/run-integration-tests.ps1 -Target Local` runs them against the Functions host backed by the Cosmos DB Emulator in two phases (Dev mode for CRUD/isolation, Entra mode for 401 checks) and adds a Blazor startup check.
 - **Postman is a convenience**: `postman/todo-api.postman_collection.json` covers every route for manual exploration. It is validated statically (valid JSON, every route present) by `scripts/check-repo-safety.ps1`, not executed as a gate.
 - **Smoke tests**: `scripts/smoke-test.ps1` runs after every deployment (`/health`, anonymous rejection, and create/read/delete when a token is supplied).

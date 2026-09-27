@@ -28,4 +28,4 @@ The specification places API Management in front of the Function App. Tiers diff
 
 - Authorization logic is unit-testable and works locally without APIM.
 - Residual risks (no per-key rate limit, public Function hostname) are documented in `docs/threat-model.md`; the Function's maximum instance count and the budget alert bound abuse cost.
-- The OpenAPI file is hand-maintained and is the source for the APIM import.
+- The OpenAPI file is hand-maintained and is the source for the APIM import. A unit test (`OpenApiContractTests`) fails if its paths and methods differ from the HTTP-triggered functions, or if `GET /health` is not the `getHealth` operation that the APIM health policy targets.

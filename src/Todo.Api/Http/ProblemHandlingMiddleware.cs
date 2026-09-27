@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Middleware;
 using Microsoft.Extensions.Logging;
@@ -17,20 +18,28 @@ internal sealed partial class ProblemHandlingMiddleware(ILogger<ProblemHandlingM
         {
             await next(context);
         }
-        catch (Exception ex) when (Find<TodoValidationException>(ex) is { } validation)
-        {
-            context.GetInvocationResult().Value = Problems.Validation(validation.Errors);
-        }
-        catch (Exception ex) when (Find<InvalidContinuationTokenException>(ex) is not null)
-        {
-            context.GetInvocationResult().Value = Problems.Validation(
-                new Dictionary<string, string[]> { ["continuationToken"] = ["The continuation token is not valid."] });
-        }
         catch (Exception ex)
         {
-            LogUnhandled(ex, context.FunctionDefinition.Name);
-            context.GetInvocationResult().Value = Problems.Unexpected();
+            context.GetInvocationResult().Value = ToProblem(ex, context.FunctionDefinition.Name);
         }
+    }
+
+    /// <summary>Returns the problem response for an exception thrown by a function; unexpected exceptions are logged.</summary>
+    internal IActionResult ToProblem(Exception exception, string functionName)
+    {
+        if (Find<TodoValidationException>(exception) is { } validation)
+        {
+            return Problems.Validation(validation.Errors);
+        }
+
+        if (Find<InvalidContinuationTokenException>(exception) is not null)
+        {
+            return Problems.Validation(
+                new Dictionary<string, string[]> { ["continuationToken"] = ["The continuation token is not valid."] });
+        }
+
+        LogUnhandled(exception, functionName);
+        return Problems.Unexpected();
     }
 
     private static T? Find<T>(Exception exception)

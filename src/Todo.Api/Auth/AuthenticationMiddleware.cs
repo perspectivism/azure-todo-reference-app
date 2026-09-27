@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Middleware;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,27 +19,44 @@ internal sealed partial class AuthenticationMiddleware(ILogger<AuthenticationMid
 
     public async Task Invoke(FunctionContext context, FunctionExecutionDelegate next)
     {
-        if (AnonymousFunctions.Contains(context.FunctionDefinition.Name))
+        var httpContext = context.GetHttpContext()
+            ?? throw new InvalidOperationException("Only HTTP-triggered functions are supported.");
+
+        var rejection = await AuthenticateAsync(
+            context.FunctionDefinition.Name,
+            httpContext,
+            context.InstanceServices.GetRequiredService<CurrentUser>());
+        if (rejection is not null)
         {
-            await next(context);
+            context.GetInvocationResult().Value = rejection;
             return;
         }
 
-        var httpContext = context.GetHttpContext()
-            ?? throw new InvalidOperationException("Only HTTP-triggered functions are supported.");
+        await next(context);
+    }
+
+    /// <summary>
+    /// Returns null when the invocation may run (an anonymous function, or an authenticated caller whose object id has
+    /// been set on <paramref name="currentUser"/>); otherwise the 401 problem response to return instead.
+    /// </summary>
+    internal async Task<IActionResult?> AuthenticateAsync(string functionName, HttpContext httpContext, CurrentUser currentUser)
+    {
+        if (AnonymousFunctions.Contains(functionName))
+        {
+            return null;
+        }
 
         var userId = await CurrentUser.AuthenticateAsync(httpContext);
         if (userId is null)
         {
             // Never log the Authorization header or token; only whether one was present.
-            LogRejected(context.FunctionDefinition.Name, httpContext.Request.Headers.Authorization.Count > 0);
+            LogRejected(functionName, httpContext.Request.Headers.Authorization.Count > 0);
             httpContext.Response.Headers.WWWAuthenticate = "Bearer";
-            context.GetInvocationResult().Value = Problems.Unauthorized();
-            return;
+            return Problems.Unauthorized();
         }
 
-        context.InstanceServices.GetRequiredService<CurrentUser>().Set(userId);
-        await next(context);
+        currentUser.Set(userId);
+        return null;
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rejected unauthenticated request to {FunctionName} (authorization header present: {HasAuthorizationHeader})")]

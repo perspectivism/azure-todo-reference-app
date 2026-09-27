@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using Todo.Contracts;
 
 namespace Todo.Api.Auth;
 
@@ -12,9 +13,9 @@ public static class AuthStartupGuard
 
         switch (options.Mode)
         {
-            case AuthMode.Dev when !environment.IsDevelopment():
-                throw new InvalidOperationException(
-                    $"Auth:Mode 'Dev' is allowed only when the host environment is Development (current: '{environment.EnvironmentName}').");
+            case AuthMode.Dev:
+                DevIdentity.EnsureAllowed(environment.IsDevelopment(), environment.EnvironmentName);
+                break;
 
             case AuthMode.Entra:
                 if (!Guid.TryParse(options.TenantId, out _))
@@ -32,9 +33,6 @@ public static class AuthStartupGuard
                     throw new InvalidOperationException("Auth:RequiredScope must not be empty.");
                 }
 
-                break;
-
-            case AuthMode.Dev:
                 break;
 
             default:

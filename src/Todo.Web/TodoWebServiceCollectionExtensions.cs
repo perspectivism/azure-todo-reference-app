@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
+using Todo.Contracts;
 using Todo.Web.Api;
 using Todo.Web.Auth;
 
@@ -49,10 +50,9 @@ public static class TodoWebServiceCollectionExtensions
 
     internal static void ValidateStartup(WebAuthOptions authOptions, TodoApiOptions apiOptions, IHostEnvironment environment, IConfiguration? azureAd = null)
     {
-        if (authOptions.Mode == WebAuthMode.Dev && !environment.IsDevelopment())
+        if (authOptions.Mode == WebAuthMode.Dev)
         {
-            throw new InvalidOperationException(
-                $"Auth:Mode 'Dev' is allowed only when the host environment is Development (current: '{environment.EnvironmentName}').");
+            DevIdentity.EnsureAllowed(environment.IsDevelopment(), environment.EnvironmentName);
         }
 
         if (!Uri.TryCreate(apiOptions.BaseUrl, UriKind.Absolute, out _))

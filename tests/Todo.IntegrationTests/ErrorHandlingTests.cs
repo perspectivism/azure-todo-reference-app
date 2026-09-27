@@ -56,6 +56,14 @@ public sealed class ErrorHandlingTests : IDisposable
     }
 
     [UserFact]
+    public async Task Fault_injection_endpoint_returns_404_by_default()
+    {
+        using var response = await _client.PostAsync("diagnostics/fault", content: null, _ct);
+
+        await ApiAssert.ProblemAsync(response, HttpStatusCode.NotFound);
+    }
+
+    [UserFact]
     public async Task Unknown_and_malformed_ids_return_404()
     {
         foreach (var id in new[] { Guid.NewGuid().ToString(), "not-a-guid" })

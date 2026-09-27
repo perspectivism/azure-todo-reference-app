@@ -150,6 +150,21 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/ServerError'
+  /diagnostics/fault:
+    post:
+      operationId: triggerFault
+      summary: Diagnostic fault injection (exception-telemetry verification)
+      description: >-
+        Requires authentication. Returns 404 unless the Function App setting Diagnostics__EnableFaultInjection is true
+        (false by default in every environment; enabled only temporarily during verification). When enabled, the
+        function throws a deliberate exception and the caller receives a generic 500 problem response.
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
 components:
   securitySchemes:
     bearerAuth:

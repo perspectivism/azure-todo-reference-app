@@ -25,6 +25,7 @@ public sealed class AuthenticationTests : IDisposable
             () => _anonymous.PostAsJsonAsync("todos", new TodoRequest { Title = "t" }, _ct),
             () => _anonymous.PutAsJsonAsync($"todos/{id}", new TodoRequest { Title = "t" }, _ct),
             () => _anonymous.DeleteAsync($"todos/{id}", _ct),
+            () => _anonymous.PostAsync("diagnostics/fault", content: null, _ct),
         };
 
         foreach (var send in requests)

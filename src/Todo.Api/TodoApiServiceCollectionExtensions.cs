@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Todo.Api.Auth;
+using Todo.Api.Functions;
 using Todo.Api.Todos;
 
 namespace Todo.Api;
@@ -41,6 +42,7 @@ public static class TodoApiServiceCollectionExtensions
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<TodoService>();
+        services.AddSingleton(configuration.GetSection(DiagnosticsOptions.SectionName).Get<DiagnosticsOptions>() ?? new DiagnosticsOptions());
         return services;
     }
 

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Versioned pre-commit hook. Install with: pwsh ./scripts/install-git-hooks.ps1
+exec pwsh -NoLogo -NoProfile -File "$(git rev-parse --show-toplevel)/scripts/pre-commit.ps1"

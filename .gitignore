@@ -1,0 +1,50 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+publish/
+*.nupkg
+
+# IDE and editor temporary files
+.vs/
+.idea/
+*.user
+*.suo
+*.swp
+*~
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+
+# Azure Functions local settings and local secrets
+local.settings.json
+appsettings.Local.json
+appsettings.*.Local.json
+secrets/
+*.secrets.json
+.env
+.env.*
+!.env.example
+*.token
+*.token.txt
+.azure/
+
+# Test results and coverage
+TestResults/
+coverage/
+*.trx
+*.coverage
+coverage*.xml
+coverage*.json
+
+# Bicep build output
+infra/**/*.json
+!infra/**/bicepconfig.json
+
+# Operating system files
+Thumbs.db
+.DS_Store

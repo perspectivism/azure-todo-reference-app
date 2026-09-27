@@ -1,0 +1,8 @@
+{
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.eol": "\n",
+  "editor.formatOnSave": false,
+  "powershell.codeFormatting.preset": "OTBS",
+  "terminal.integrated.defaultProfile.windows": "PowerShell"
+}

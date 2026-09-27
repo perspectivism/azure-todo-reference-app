@@ -1,0 +1,77 @@
+# Validation for pull requests and for main (the README badge reports this workflow on main).
+# Read-only: no cloud access, no secrets, no deployment.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up .NET (from global.json)
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore TodoApp.slnx
+
+      - name: Build (warnings as errors)
+        run: dotnet build TodoApp.slnx --no-restore -c Release -p:TreatWarningsAsErrors=true
+
+      - name: Unit tests (xUnit + bUnit)
+        run: dotnet test tests/Todo.UnitTests/Todo.UnitTests.csproj --no-build -c Release --logger "trx;LogFileName=unit.trx"
+
+      - name: Formatting
+        run: dotnet format TodoApp.slnx --verify-no-changes --no-restore
+
+      - name: Vulnerable package report
+        shell: pwsh
+        run: |
+          $report = dotnet list TodoApp.slnx package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Output $report
+          "## Vulnerable package report`n``````text`n$report`n``````" | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+          if ($report -match 'has the following vulnerable packages') {
+            Write-Output '::warning::Vulnerable packages were reported. See the job summary.'
+          }
+
+      - name: Bicep build, lint, and parameter files
+        shell: pwsh
+        run: |
+          az bicep install
+          az bicep version
+          az bicep build --file ./infra/main.bicep --stdout | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          az bicep lint --file ./infra/main.bicep
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          foreach ($file in Get-ChildItem ./infra/parameters/*.bicepparam) {
+            az bicep build-params --file $file.FullName --stdout | Out-Null
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
+      - name: Repository safety checks
+        shell: pwsh
+        run: ./scripts/check-repo-safety.ps1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: unit-test-results
+          path: tests/Todo.UnitTests/TestResults/*.trx
+          if-no-files-found: ignore

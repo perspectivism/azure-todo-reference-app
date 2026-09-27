@@ -1,0 +1,168 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "detail": "Build the solution",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/TodoApp.slnx",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test: unit",
+      "detail": "Run unit and bUnit component tests",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "test",
+        "${workspaceFolder}/tests/Todo.UnitTests/Todo.UnitTests.csproj"
+      ],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test: integration (local)",
+      "detail": "Start the Functions host and run HTTP integration tests (scripts/run-integration-tests.ps1 -Target Local)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/scripts/run-integration-tests.ps1",
+        "-Target",
+        "Local"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "build: api",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Todo.Api/Todo.Api.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build: web",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Todo.Web/Todo.Web.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "func: host start",
+      "detail": "Debugging only: build Todo.Api and start the Functions host in debug mode; the worker waits for the debugger. Started by the Functions debug configuration (azureFunctions.pickProcess).",
+      "type": "func",
+      "command": "host start",
+      "args": ["--port", "7071", "--no-build", "--dotnet-isolated-debug", "--enable-json-output"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/Todo.Api/bin/Debug/net10.0"
+      },
+      "dependsOn": "build: api",
+      "isBackground": true,
+      "problemMatcher": "$func-dotnet-watch"
+    },
+    {
+      "label": "run: api",
+      "detail": "Build Todo.Api and run the Functions host on http://localhost:7071 without a debugger",
+      "type": "process",
+      "command": "func",
+      "args": ["start", "--port", "7071", "--no-build"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/Todo.Api/bin/Debug/net10.0"
+      },
+      "dependsOn": "build: api",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "func",
+        "source": "func",
+        "pattern": {
+          "regexp": "^__never_matches__$",
+          "file": 1,
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Azure Functions Core Tools",
+          "endsPattern": "Worker process started and initialized|Host lock lease acquired by instance ID"
+        }
+      }
+    },
+    {
+      "label": "run: web",
+      "detail": "Run the Blazor Web App (Todo.Web) on http://localhost:5230",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/src/Todo.Web/Todo.Web.csproj",
+        "--launch-profile",
+        "http"
+      ],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "check prerequisites",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/scripts/check-prerequisites.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "check repo safety",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/scripts/check-repo-safety.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "bicep: build and lint",
+      "detail": "Build and lint infra/main.bicep and build both parameter files",
+      "type": "shell",
+      "command": "az bicep build --file infra/main.bicep --stdout > $null; az bicep lint --file infra/main.bicep; az bicep build-params --file infra/parameters/dev.bicepparam --stdout > $null; az bicep build-params --file infra/parameters/prod.bicepparam --stdout > $null",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "args": [
+            "-NoProfile",
+            "-Command"
+          ],
+          "executable": "pwsh"
+        }
+      },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "dotnet.defaultSolution": "TodoApp.slnx",
+  "azureFunctions.projectSubpath": "src/Todo.Api",
+  "azureFunctions.projectLanguage": "C#",
+  "azureFunctions.projectRuntime": "~4",
+  "azureFunctions.validateEmulators": false,
+  "debug.internalConsoleOptions": "neverOpen",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.eol": "\n",
+  "editor.formatOnSave": false,
+  "powershell.codeFormatting.preset": "OTBS",
+  "terminal.integrated.defaultProfile.windows": "PowerShell"
+}

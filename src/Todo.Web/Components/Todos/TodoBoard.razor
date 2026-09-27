@@ -1,0 +1,261 @@
+@using Todo.Contracts
+@using Todo.Web.Api
+@inject ITodoApiClient Api
+@inject NavigationManager Navigation
+
+<section aria-labelledby="new-todo-heading" class="mb-4">
+    <h2 id="new-todo-heading" class="h5">Add a todo</h2>
+    <EditForm Model="_newTodo" OnValidSubmit="CreateAsync" FormName="create-todo" class="new-todo">
+        <DataAnnotationsValidator />
+        <div class="mb-2">
+            <label for="new-title" class="form-label">Title</label>
+            <InputText id="new-title" class="form-control" @bind-Value="_newTodo.Title" maxlength="@TodoLimits.TitleMaxLength" />
+            <ValidationMessage For="() => _newTodo.Title" />
+        </div>
+        <div class="mb-2">
+            <label for="new-description" class="form-label">Description <span class="text-muted">(optional)</span></label>
+            <InputTextArea id="new-description" class="form-control" rows="2" @bind-Value="_newTodo.Description" maxlength="@TodoLimits.DescriptionMaxLength" />
+            <ValidationMessage For="() => _newTodo.Description" />
+        </div>
+        @if (_createErrors.Count > 0)
+        {
+            <ul class="validation-errors server-errors">
+                @foreach (var message in _createErrors)
+                {
+                    <li class="validation-message">@message</li>
+                }
+            </ul>
+        }
+        <button type="submit" class="btn btn-primary" disabled="@_busy">Add</button>
+    </EditForm>
+</section>
+
+<section aria-labelledby="todo-list-heading">
+    <h2 id="todo-list-heading" class="h5">My todos</h2>
+
+    @if (_actionError is not null)
+    {
+        <div class="alert alert-warning action-error" role="alert">@_actionError</div>
+    }
+
+    @if (_loadError is not null)
+    {
+        <div class="alert alert-danger load-error" role="alert">
+            @_loadError
+            <button type="button" class="btn btn-sm btn-outline-danger ms-2 retry" @onclick="LoadAsync">Try again</button>
+        </div>
+    }
+    else if (_todos is null)
+    {
+        <p class="text-muted loading" role="status">Loading todos…</p>
+    }
+    else if (_todos.Count == 0)
+    {
+        <p class="text-muted empty-state">No todos yet. Add one above.</p>
+    }
+    else
+    {
+        <ul class="list-group todo-list">
+            @foreach (var todo in _todos)
+            {
+                <li class="list-group-item todo-item" @key="todo.Id" data-todo-id="@todo.Id">
+                    @if (_editingId == todo.Id)
+                    {
+                        <EditForm Model="_editModel" OnValidSubmit="() => SaveEditAsync(todo)" FormName="@($"edit-{todo.Id}")" class="edit-todo">
+                            <DataAnnotationsValidator />
+                            <InputText class="form-control mb-1 edit-title" aria-label="Title" @bind-Value="_editModel.Title" maxlength="@TodoLimits.TitleMaxLength" />
+                            <ValidationMessage For="() => _editModel.Title" />
+                            <InputTextArea class="form-control mb-1 edit-description" aria-label="Description" rows="2" @bind-Value="_editModel.Description" maxlength="@TodoLimits.DescriptionMaxLength" />
+                            <ValidationMessage For="() => _editModel.Description" />
+                            @foreach (var message in _editErrors)
+                            {
+                                <div class="validation-message">@message</div>
+                            }
+                            <button type="submit" class="btn btn-sm btn-primary save" disabled="@_busy">Save</button>
+                            <button type="button" class="btn btn-sm btn-secondary cancel" @onclick="CancelEdit">Cancel</button>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <div class="d-flex align-items-start gap-2">
+                            <input type="checkbox" class="form-check-input mt-1 toggle" checked="@todo.IsComplete" disabled="@_busy"
+                                   aria-label="@(todo.IsComplete ? "Mark as not complete" : "Mark as complete")"
+                                   @onchange="() => ToggleAsync(todo)" />
+                            <div class="flex-grow-1">
+                                <div class="todo-title @(todo.IsComplete ? "text-decoration-line-through text-muted" : null)">@todo.Title</div>
+                                @if (!string.IsNullOrEmpty(todo.Description))
+                                {
+                                    <div class="small text-muted todo-description">@todo.Description</div>
+                                }
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary edit" disabled="@_busy" @onclick="() => StartEdit(todo)">Edit</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger delete" disabled="@_busy" @onclick="() => DeleteAsync(todo)">Delete</button>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+
+        @if (_continuationToken is not null)
+        {
+            <button type="button" class="btn btn-link load-more" disabled="@_busy" @onclick="LoadMoreAsync">Load more</button>
+        }
+    }
+</section>
+
+@code {
+    private const int PageSize = 20;
+
+    private List<TodoResponse>? _todos;
+    private string? _continuationToken;
+    private string? _loadError;
+    private string? _actionError;
+    private bool _busy;
+
+    private TodoRequest _newTodo = new();
+    private List<string> _createErrors = [];
+
+    private Guid? _editingId;
+    private TodoRequest _editModel = new();
+    private List<string> _editErrors = [];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+        _todos = null;
+        try
+        {
+            var page = await Api.ListAsync(PageSize, null);
+            _todos = [.. page.Items];
+            _continuationToken = page.ContinuationToken;
+        }
+        catch (Exception ex) when (IsHandled(ex))
+        {
+            _loadError = "Your todos could not be loaded.";
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var page = await Api.ListAsync(PageSize, _continuationToken);
+            var todos = _todos ??= [];
+            var known = todos.Select(t => t.Id).ToHashSet();
+            todos.AddRange(page.Items.Where(t => !known.Contains(t.Id)));
+            _continuationToken = page.ContinuationToken;
+        });
+    }
+
+    private async Task CreateAsync()
+    {
+        _createErrors = [];
+        await RunAsync(async () =>
+        {
+            try
+            {
+                var created = await Api.CreateAsync(_newTodo);
+                (_todos ??= []).Insert(0, created);
+                _newTodo = new TodoRequest();
+            }
+            catch (TodoApiException ex) when (ex.StatusCode == 400)
+            {
+                _createErrors = FieldErrors(ex);
+            }
+        });
+    }
+
+    private async Task ToggleAsync(TodoResponse todo)
+    {
+        var request = new TodoRequest { Title = todo.Title, Description = todo.Description, IsComplete = !todo.IsComplete };
+        await RunAsync(async () => Replace(await Api.UpdateAsync(todo.Id, request)));
+    }
+
+    private void StartEdit(TodoResponse todo)
+    {
+        _editingId = todo.Id;
+        _editErrors = [];
+        _editModel = new TodoRequest { Title = todo.Title, Description = todo.Description, IsComplete = todo.IsComplete };
+    }
+
+    private void CancelEdit()
+    {
+        _editingId = null;
+        _editErrors = [];
+    }
+
+    private async Task SaveEditAsync(TodoResponse todo)
+    {
+        _editErrors = [];
+        await RunAsync(async () =>
+        {
+            try
+            {
+                Replace(await Api.UpdateAsync(todo.Id, _editModel));
+                _editingId = null;
+            }
+            catch (TodoApiException ex) when (ex.StatusCode == 400)
+            {
+                _editErrors = FieldErrors(ex);
+            }
+        });
+    }
+
+    private async Task DeleteAsync(TodoResponse todo)
+    {
+        await RunAsync(async () =>
+        {
+            await Api.DeleteAsync(todo.Id);
+            _todos?.RemoveAll(t => t.Id == todo.Id);
+        });
+    }
+
+    private void Replace(TodoResponse updated)
+    {
+        var index = _todos?.FindIndex(t => t.Id == updated.Id) ?? -1;
+        if (index >= 0)
+        {
+            _todos![index] = updated;
+        }
+    }
+
+    /// <summary>Runs an API operation, keeping the current list visible and showing a short message on failure.</summary>
+    private async Task RunAsync(Func<Task> operation)
+    {
+        _busy = true;
+        _actionError = null;
+        try
+        {
+            await operation();
+        }
+        catch (TodoApiException ex) when (ex.StatusCode == 404)
+        {
+            _actionError = "That todo no longer exists. The list has been refreshed.";
+            await LoadAsync();
+        }
+        catch (Exception ex) when (IsHandled(ex))
+        {
+            _actionError = "The change could not be saved. Please try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private bool IsHandled(Exception ex)
+    {
+        if (ex is ReauthenticationRequiredException)
+        {
+            Navigation.NavigateTo($"authentication/sign-in?returnUrl={Uri.EscapeDataString(Navigation.Uri)}", forceLoad: true);
+            return true;
+        }
+
+        return ex is TodoApiException or HttpRequestException or TaskCanceledException;
+    }
+
+    private static List<string> FieldErrors(TodoApiException ex)
+        => ex.Errors.Count > 0 ? [.. ex.Errors.SelectMany(e => e.Value)] : ["The todo is not valid."];
+}

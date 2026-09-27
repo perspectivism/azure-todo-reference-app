@@ -1,0 +1,283 @@
+openapi: 3.0.1
+info:
+  title: Todo API
+  version: '1.0'
+  description: >-
+    Multi-user Todo API implemented as Azure Functions (.NET isolated worker) behind Azure API Management.
+    Every route except /health requires a Microsoft Entra ID v2 access token for the todo-api application
+    with the delegated scope access_as_user. The owner of a todo is always the token's oid claim; a userId
+    is never accepted from, or returned to, the caller. Errors use RFC 9457 application/problem+json.
+    This file is hand-maintained and imported by API Management (infra/modules/apim.bicep).
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Shallow liveness check
+      description: Anonymous. Does not touch Cosmos DB and returns no sensitive data.
+      security: []
+      responses:
+        '200':
+          description: The API is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /todos:
+    get:
+      operationId: listTodos
+      summary: List the caller's todos, newest first
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: continuationToken
+          in: query
+          required: false
+          description: Opaque token from the previous page's continuationToken.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One page of todos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      operationId: createTodo
+      summary: Create a todo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TodoRequest'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              description: Relative URL of the new todo (/todos/{id}).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /todos/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Todo id (GUID). A malformed id, an unknown id, and another user's id all return 404.
+        schema:
+          type: string
+    get:
+      operationId: getTodo
+      summary: Get one of the caller's todos
+      responses:
+        '200':
+          description: The todo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      operationId: updateTodo
+      summary: Replace title, description and isComplete (also used to complete or uncomplete)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TodoRequest'
+      responses:
+        '200':
+          description: The updated todo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      operationId: deleteTodo
+      summary: Delete one of the caller's todos
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /diagnostics/fault:
+    post:
+      operationId: triggerFault
+      summary: Diagnostic fault injection (exception-telemetry verification)
+      description: >-
+        Requires authentication. Returns 404 unless the Function App setting Diagnostics__EnableFaultInjection is true
+        (false by default in every environment; enabled only temporarily during verification). When enabled, the
+        function throws a deliberate exception and the caller receives a generic 500 problem response.
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Entra ID v2 access token, audience todo-api, scope access_as_user.
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: healthy
+    TodoRequest:
+      type: object
+      description: Any other supplied field (including userId, id and timestamps) is ignored.
+      required: [title]
+      properties:
+        title:
+          type: string
+          description: Required. Trimmed; 1 to 200 characters after trimming.
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+        isComplete:
+          type: boolean
+          default: false
+    TodoResponse:
+      type: object
+      required: [id, title, isComplete, createdUtc, updatedUtc]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        isComplete:
+          type: boolean
+        createdUtc:
+          type: string
+          format: date-time
+          description: Set by the server (UTC).
+        updatedUtc:
+          type: string
+          format: date-time
+          description: Set by the server (UTC).
+    TodoListResponse:
+      type: object
+      required: [items, continuationToken]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodoResponse'
+        continuationToken:
+          type: string
+          nullable: true
+          description: Pass as continuationToken to get the next page; null on the last page.
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        traceId:
+          type: string
+        errors:
+          type: object
+          description: Present on validation errors; maps a field name to its messages.
+          additionalProperties:
+            type: array
+            items:
+              type: string
+  responses:
+    BadRequest:
+      description: Invalid or malformed request.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Unauthorized:
+      description: Missing or invalid access token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: Unknown id, malformed id, or an id owned by another user.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    PayloadTooLarge:
+      description: Request body larger than 16 KB.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ServerError:
+      description: Unexpected error. No internal details are returned.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
